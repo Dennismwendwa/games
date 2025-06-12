@@ -1,8 +1,9 @@
 #include <SFML/Graphics.hpp>
 #include <deque>
-#include <cstdlib>
-#include <ctime>
+#include <iostream>
 #include <random>
+#include <string>
+#include <SFML/Audio.hpp>
 
 
 const int cellSize = 20;
@@ -70,12 +71,42 @@ Direction getRandomDirection(std::mt19937& rng) {
     return static_cast<Direction>(dist(rng));
 }
 
+sf::Music bgMusic;
+
 int main() {
     std::random_device rd;
     std::mt19937 rng(rd());
+    std::string basePath = ASSET_PATH;
+
+    sf::SoundBuffer eatBuffer, gameOverBuffer;
+    if (!eatBuffer.loadFromFile(basePath + "/music/gameover.ogg") || !gameOverBuffer.loadFromFile(basePath + "/music/gameover.ogg")) {
+        return -1;
+    }
+    sf::Sound eatSound(eatBuffer);
+    sf::Sound gameOverSound(gameOverBuffer);
+
+    // loading the background music
+    static sf::Music bgMusic;
+    if (!bgMusic.openFromFile(basePath + "/music/gameover.ogg")) {
+        std::cerr << "Failed to load background music\n";
+        return -1;
+    }
+    bgMusic.setLoop(true);
+    bgMusic.play();
+    std::cout << "Music status: " << bgMusic.getStatus() << "\n";
+    int baseSpeed = 5;
 
     sf::RenderWindow window(sf::VideoMode(windowWidth, windowHeight), "Snake Game");
     window.setFramerateLimit(5);
+
+    sf::Font font;
+    font.loadFromFile("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf");
+
+    sf::Text scoreText;
+    scoreText.setFont(font);
+    scoreText.setCharacterSize(24);
+    scoreText.setFillColor(sf::Color::White);
+    scoreText.setPosition(10, 5);
 
     std::deque<sf::Vector2i> snake;
     snake.push_back({width / 2, height / 2});
@@ -84,6 +115,7 @@ int main() {
     bool grow = false;
 
     sf::Vector2i food = getRandomPosition(snake, rng);
+    int score{};
     bool gameOver = false;
 
     while (window.isOpen()) {
@@ -92,6 +124,9 @@ int main() {
             if (event.type == sf::Event::Closed) {
                 window.close();
             }
+
+            int speed = baseSpeed + (score / 5);
+            window.setFramerateLimit(speed);
 
             if (event.type == sf::Event::KeyPressed) {
                 if (event.key.code == sf::Keyboard::Up && dir != Direction::Down) dir = Direction::Up;
@@ -117,6 +152,7 @@ int main() {
 
             if (isOutOfBounds(head) || checkSelfCollision(snake)) {
                 gameOver = true;
+                gameOverSound.play();
                 continue;
             }
 
@@ -124,19 +160,24 @@ int main() {
 
             if (head == food) {
                 food = getRandomPosition(snake, rng);
+                score++;
+                eatSound.play();
             } else {
                 snake.pop_back();
             }
+            scoreText.setString("Score: " + std::to_string(score));
         }
 
 
         window.clear(sf::Color::Black);
 
+        // Drawing food
         sf::RectangleShape foodRect(sf::Vector2f(cellSize - 2, cellSize - 2));
         foodRect.setFillColor(sf::Color::Red);
         foodRect.setPosition(food.x * cellSize, food.y * cellSize);
         window.draw(foodRect);
 
+        // Drawing snake
         for (const auto& segment : snake) {
             sf::RectangleShape rect(sf::Vector2f(cellSize - 2, cellSize - 2));
             rect.setFillColor(sf::Color::Green);
@@ -144,6 +185,11 @@ int main() {
             window.draw(rect);
         }
 
+        // Drawing score
+        //std::cout << "Score: " << scoreText << std::endl;
+        window.draw(scoreText);
+
+        // Drawing game over
         if (gameOver) {
             sf::Font font;
 
@@ -152,6 +198,7 @@ int main() {
                 text.setFillColor(sf::Color::White);
                 text.setPosition(100, 200);
                 window.draw(text);
+                score = 0;
             }
         }
         //
