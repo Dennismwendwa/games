@@ -1,3 +1,0 @@
-/home/dennis/games/build/CMakeFiles/SnakeGame.dir
-/home/dennis/games/build/CMakeFiles/edit_cache.dir
-/home/dennis/games/build/CMakeFiles/rebuild_cache.dir

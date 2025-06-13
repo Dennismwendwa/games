@@ -1,8 +1,0 @@
-[
-{
-  "directory": "/home/dennis/games/build",
-  "command": "/usr/bin/g++ -DASSET_PATH=\\\"/home/dennis/games/SnakeGame/assets\\\"  -g -std=gnu++17 -o CMakeFiles/SnakeGame.dir/src/main.cpp.o -c /home/dennis/games/SnakeGame/src/main.cpp",
-  "file": "/home/dennis/games/SnakeGame/src/main.cpp",
-  "output": "CMakeFiles/SnakeGame.dir/src/main.cpp.o"
-}
-]
