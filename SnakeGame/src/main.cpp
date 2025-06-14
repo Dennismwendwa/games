@@ -63,7 +63,17 @@ int main() {
     std::random_device rd;
     std::mt19937 rng(rd());
 
-    std::string basePath = ASSET_PATH;  // You should define this via compiler flag
+    std::string basePath = ASSET_PATH;
+
+    sf::Vector2i bonusFood;
+    bool bonusFoodVisible = false;
+    int bonusFoodTimer = 0;
+    const int bonusFoodDuration = 100;
+    const int bonusFoodCooldown = 200;
+    int bonusCooldownTimer = bonusFoodCooldown;
+
+    sf::Texture bonusFoodTex;
+    sf::Sprite bonusFoodSprite;
 
     sf::SoundBuffer eatBuffer, gameOverBuffer;
     if (!eatBuffer.loadFromFile(basePath + "/music/eat.ogg") ||
@@ -92,7 +102,16 @@ int main() {
         return -1;
     }
 
-    // Create sprites once and scale them
+    if (!bonusFoodTex.loadFromFile(basePath + "/sprites/bonus.png")) {
+        std::cerr << "Failed to load bonus food sprite!\n";
+        return -1;
+    }
+    bonusFoodSprite.setTexture(bonusFoodTex);
+    bonusFoodSprite.setScale(
+        static_cast<float>(cellSize) / bonusFoodTex.getSize().x,
+        static_cast<float>(cellSize) / bonusFoodTex.getSize().y
+    );
+
     sf::Sprite bgTile(backgroundTex);
     bgTile.setScale(
         static_cast<float>(cellSize) / backgroundTex.getSize().x,
@@ -154,9 +173,7 @@ int main() {
                     }
                     if (event.key.code == sf::Keyboard::Escape) window.close();
                 }
-            }
-
-            else if (state == GameState::PLAYING) {
+            } else if (state == GameState::PLAYING) {
                 int speed = baseSpeed + (score / 5);
                 window.setFramerateLimit(speed);
 
@@ -167,14 +184,10 @@ int main() {
                     if (event.key.code == sf::Keyboard::Right && dir != Direction::Left) dir = Direction::Right;
                     if (event.key.code == sf::Keyboard::P) state = GameState::PAUSED;
                 }
-            }
-
-            else if (state == GameState::PAUSED) {
+            } else if (state == GameState::PAUSED) {
                 if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::P)
                     state = GameState::PLAYING;
-            }
-
-            else if (state == GameState::GAME_OVER) {
+            } else if (state == GameState::GAME_OVER) {
                 if (event.type == sf::Event::KeyPressed) {
                     if (event.key.code == sf::Keyboard::R) {
                         // Restart game
@@ -214,10 +227,33 @@ int main() {
                 snake.pop_back();
             }
 
+            //bonus food spawning
+            if (!bonusFoodVisible) {
+                bonusCooldownTimer--;
+                if (bonusCooldownTimer <= 0) {
+                    bonusFood = getRandomPosition(snake, rng);
+                    bonusFoodVisible = true;
+                    bonusFoodTimer = bonusFoodDuration;
+                    bonusCooldownTimer = bonusFoodCooldown;
+                }
+            } else {
+                bonusFoodTimer--;
+                if (bonusFoodTimer <= 0) {
+                    bonusFoodVisible = false;
+                }
+            }
+
+            // if bonus food was eaten
+            if (bonusFoodVisible && head == bonusFood) {
+                score += 5; // Give extra points
+                bonusFoodVisible = false;
+                eatSound.play();
+            }
+
             scoreText.setString("Score: " + std::to_string(score));
         }
 
-        // ✅ Draw background grid
+        // Draw background grid
         for (int x = 0; x < width; ++x) {
             for (int y = 0; y < height; ++y) {
                 bgTile.setPosition(x * cellSize, y * cellSize);
@@ -225,17 +261,12 @@ int main() {
             }
         }
 
-        // ✅ Draw snake
+        // Draw snake
         for (size_t i = 0; i < snake.size(); ++i) {
             sf::Vector2i pos = snake[i];
             sf::Sprite& sprite = (i == 0) ? headSprite : bodySprite;
             sprite.setPosition(pos.x * cellSize, pos.y * cellSize);
-            window.draw(sprite);
         }
-
-        // ✅ Draw food
-        foodSprite.setPosition(food.x * cellSize, food.y * cellSize);
-        window.draw(foodSprite);
 
         if (state == GameState::MENU) {
             sf::Text title("SNAKE GAME", font, 48);
@@ -248,22 +279,64 @@ int main() {
 
             window.draw(title);
             window.draw(prompt);
-        }
+        } else if (state == GameState::PLAYING || state == GameState::PAUSED) {
+            // Draw food
+            foodSprite.setPosition(food.x * cellSize, food.y * cellSize);
+            window.draw(foodSprite);
 
-        else if (state == GameState::PLAYING || state == GameState::PAUSED) {
-            sf::RectangleShape foodRect(sf::Vector2f(cellSize - 2, cellSize - 2));
-            foodRect.setFillColor(sf::Color::Red);
-            foodRect.setPosition(food.x * cellSize, food.y * cellSize);
-            window.draw(foodRect);
+            // Draw bonus food
+            if (bonusFoodVisible) {
+                bonusFoodSprite.setPosition(bonusFood.x * cellSize, bonusFood.y * cellSize);
+                window.draw(bonusFoodSprite);
+            }
 
+            bool isHead = true;
             for (const auto& segment : snake) {
-                sf::RectangleShape rect(sf::Vector2f(cellSize - 2, cellSize - 2));
-                rect.setFillColor(sf::Color::Green);
-                rect.setPosition(segment.x * cellSize, segment.y * cellSize);
-                window.draw(rect);
+                if (isHead) {
+                    headSprite.setPosition(segment.x * cellSize, segment.y * cellSize);
+                    headSprite.setRotation(0);
+
+                    switch (dir) {
+                        case Direction::Up:
+                            headSprite.setRotation(180);
+                            break;
+                        case Direction::Right:
+                            headSprite.setRotation(270);
+                            break;
+                        case Direction::Down:
+                            headSprite.setRotation(0);
+                            break;
+                        case Direction::Left:
+                            headSprite.setRotation(90);
+                            break;
+                    }
+
+                    headSprite.setOrigin(
+                        headTex.getSize().x / 2.0f,
+                        headTex.getSize().y / 2.0f
+                    );
+
+                    headSprite.setPosition(
+                        segment.x * cellSize + cellSize / 2.0f,
+                        segment.y * cellSize + cellSize / 2.0f
+                    );
+
+                    window.draw(headSprite);
+                    isHead = false;
+                } else {
+                    bodySprite.setPosition(segment.x * cellSize, segment.y * cellSize);
+                    window.draw(bodySprite);
+                }
             }
 
             window.draw(scoreText);
+
+            if (bonusFoodVisible) {
+                sf::Text bonusTimerText("Bonus: " + std::to_string(bonusFoodTimer / 5), font, 20);
+                bonusTimerText.setFillColor(sf::Color::Yellow);
+                bonusTimerText.setPosition(10, 35);
+                window.draw(bonusTimerText);
+            }
 
             if (state == GameState::PAUSED) {
                 sf::Text pausedText("PAUSED\nPress P to Resume", font, 24);
@@ -271,9 +344,7 @@ int main() {
                 pausedText.setPosition(100, 200);
                 window.draw(pausedText);
             }
-        }
-
-        else if (state == GameState::GAME_OVER) {
+        } else if (state == GameState::GAME_OVER) {
             sf::Text gameOverText("Game Over\nPress R to Restart\nPress M for Main Menu", font, 24);
             gameOverText.setFillColor(sf::Color::White);
             gameOverText.setPosition(100, 200);
